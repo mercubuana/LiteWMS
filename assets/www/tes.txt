@@ -1,0 +1,344 @@
+<!doctype html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<title>My Contacts</title>
+			<link rel="stylesheet" href="jquery.mobile-1.3.1.min.css">
+			<script type="text/javascript" charset="utf-8" src="jquery-1.7.1.min.js"></script>
+			<script type="text/javascript" charset="utf-8" src="jquery.mobile-1.3.1.min.js"></script>
+			<script type="text/javascript" charset="utf-8" src="cordova-2.7.0.js"></script>
+			<style>
+			.error{
+				font-size: 0.8em;
+				border: 1px solid;
+				margin: 10px 0px;
+				padding:15px 10px 15px 8px;
+				text-align:center;
+				color: #D8000C;
+				background-color: #FFBABA;
+			}
+			</style>
+			<script type="text/javascript" charset="utf-8">
+			
+			$(document).ready(function(){
+
+				document.addEventListener("deviceready", onDeviceReady, false);
+				
+				var db = window.openDatabase("Database", "1.0", "MyContactsDB", 200000);
+
+				function onDeviceReady(){
+					//Populate the databse
+					db.transaction(populateDB, errorCB, successCB);
+					//Override the back button functionality
+					document.addEventListener('backbutton', onBack, false);
+				}
+				
+				function onBack(){
+					//If the current page is index page then exit other wise navigate to index page
+					if($.mobile.activePage.is('#index')){
+						navigator.app.exitApp();
+					}
+					else{
+						db.transaction(queryDB, errorCB);
+					}
+				}				
+
+				function populateDB(tx){
+					//Create the table
+					//tx.executeSql('DROP TABLE IF EXISTS MyContacts');
+					tx.executeSql('CREATE TABLE IF NOT EXISTS MyContacts (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+							name TEXT NOT NULL, nickName TEXT, mobilePhoneNumber INT, \
+							workPhoneNumber INT, emailId TEXT, website TEXT, happyBirthDay TEXT)\
+						     ');
+					tx.executeSql('SELECT id, name, nickName FROM MyContacts ORDER BY name', [], querySuccess, errorCB);
+				}
+
+				function successCB(){
+					db.transaction(queryDB, errorCB);
+				}
+
+				function queryDB(tx){
+					tx.executeSql('SELECT id, name, nickName FROM MyContacts ORDER BY name', [], querySuccess, errorCB);
+				}
+
+				function querySuccess(tx, results){
+					$.mobile.showPageLoadingMsg(true);
+					var len = results.rows.length;
+					$("#userList").html('');
+					for (var i=0; i<len; i++){
+						var row= results.rows.item(i);
+						var htmlData = '<li id="'+row["id"]+'"><a href="#"><h2>'+row["name"]+'</h2><p class="ui-li-aside">'+row["nickName"]+'</p></a></li>';
+						$("#userList").append(htmlData).listview('refresh');
+					}
+					$.mobile.changePage($("#index"), { transition : "slide"});
+					$.mobile.hidePageLoadingMsg();
+				}
+
+				function errorCB(err){
+
+				}		
+			
+				$("#addNewPage .error").html('').hide();
+
+				$(".addNew").bind ("click", function (event){
+					$("#addNewPage .error").html('').hide();
+					$.mobile.changePage ($("#addNewPage"), { transition : "slide", reverse : true });
+					$("#addNewPageHeader").html("Add New");
+				});
+
+				$("#save").bind ("click", function (event){
+					var name = $.trim($("#name").val()).replace(/[^A-Za-z0-9 ]/g, '');
+					var nickName = $.trim($("#nickName").val()).replace(/[^A-Za-z0-9 @]/g, '');
+					var mobilePhoneNumber = $.trim($("#mobilePhoneNumber").val()).replace(/[^0-9-]/g, '');
+					var workPhoneNumber = $.trim($("#workPhoneNumber").val()).replace(/[^0-9-]/g, '');
+					var emailId = $.trim($("#emailId").val());
+					var website = $.trim($("#website").val());
+					var happyBirthDay = $.trim($("#happyBirthDay").val());
+					console.log(name+' '+nickName+' '+mobilePhoneNumber+' '+workPhoneNumber+' '+emailId+' '+website+' '+happyBirthDay);
+
+					if (name == ''){
+						$("#addNewPage .error").html('Please enter name.').show();
+					}
+					else{
+						resetForm();
+
+						var id = $("#id").val();
+						$("#id").val('');
+						if (id == ''){  //Save
+							db.transaction(function (tx){ tx.executeSql("INSERT INTO MyContacts (name, nickName, mobilePhoneNumber, workPhoneNumber, emailId, website, happyBirthDay) VALUES  (?, ?, ?, ?, ?, ?, ?)",[name, nickName, mobilePhoneNumber, workPhoneNumber, emailId, website, happyBirthDay],
+							queryDB, errorCB); });	
+						}
+						else{   //Update
+							db.transaction(function (tx){ tx.executeSql("UPDATE MyContacts SET name=?, nickName=?, mobilePhoneNumber=?, workPhoneNumber=?, emailId=?, website=?, happyBirthDay=? WHERE id=? ",[name, nickName, mobilePhoneNumber, workPhoneNumber, emailId, website, happyBirthDay, id],
+							queryDB, errorCB); });	
+						}
+						db.transaction(queryDB, errorCB);
+					}
+				});
+				
+				$(".refresh").bind("click", function (event){
+					db.transaction(queryDB, errorCB);
+				});
+				
+				$(".back").bind("click", function (event){
+					resetForm();
+					db.transaction(queryDB, errorCB);
+				});
+				
+				function resetForm(){
+					$("#addNewPage .error").html('').hide();
+					$("#addNewPage #name").val('');
+					$("#addNewPage #nickName").val('');
+					$("#addNewPage #mobilePhoneNumber").val('');
+					$("#addNewPage #workPhoneNumber").val('');
+					$("#addNewPage #emailId").val('');
+					$("#addNewPage #website").val('');
+					$("#addNewPage #happyBirthDay").val('');
+					$("#addNewPage #addNewPageHeader").html('');	
+				}
+				
+				$("#index [data-role='content'] ul").on('tap taphold', 'li', function (event){
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					var liId = this.id;
+					if (event.type === 'taphold'){
+						navigator.notification.vibrate(30);
+						var $popup = $('#actionList-popup');
+						$("#actionList").html('');
+						$("#actionList").append('<li id="edit&'+liId+'">Edit</li>').listview('refresh');
+						$("#actionList").append('<li id="delete&'+liId+'">Delete</li>').listview('refresh');
+						$popup.popup();
+						$popup.popup('open');
+						$("#tapHoldCheck").val('true');
+					} 
+					else if (event.type === 'tap'){
+						if ($("#tapHoldCheck").val() == ''){ //If the value of the text box is blank then only tap will work
+							db.transaction(function (tx){
+								tx.executeSql("SELECT name, nickName, mobilePhoneNumber, workPhoneNumber, emailId, website, happyBirthDay  FROM MyContacts WHERE id=?;", [liId], function (tx, results){
+									var row = results.rows.item(0);
+									$.mobile.showPageLoadingMsg(true);
+									$.mobile.changePage($("#displayDataPage"), { transition : "slide"});
+									$("#nameHeader").html(row['name']);
+									$("#dataName").html(row['name']);
+									$("#dataNickName").html(row['nickName']);
+									$("#dataMobilePhoneNumber").html(row['mobilePhoneNumber']);
+									if(row['mobilePhoneNumber'] != ''){
+										$("#mpnCallSMS").html(
+										'<div class="ui-grid-a">' +
+											'<div class="ui-block-a">'+
+												'<a href="tel:'+row['mobilePhoneNumber']+'" data-role="button">Call</a>' +
+												'</div>' +
+											'<div class="ui-block-b">' +
+												'<a href="sms:'+row['mobilePhoneNumber']+'" data-role="button">SMS</a>' +
+											'</div>' +
+										'</div>'
+										);
+									}
+									else{
+										$("#mpnCallSMS").html('');
+									}
+									$("#dataWorkPhoneNumber").html(row['workPhoneNumber']);
+									if(row['workPhoneNumber'] !='' ){
+										$("#wpnCallSMS").html(
+										'<div class="ui-grid-a">' +
+											'<div class="ui-block-a">'+
+												'<a href="tel:'+row['workPhoneNumber']+'" data-role="button">Call</a>' +
+												'</div>' +
+											'<div class="ui-block-b">' +
+												'<a href="sms:'+row['workPhoneNumber']+'" data-role="button">SMS</a>' +
+											'</div>' +
+										'</div>'
+										);
+									}
+									else{
+										$("#wpnCallSMS").html('');
+									}
+									$("#dataEmailId").html('<a href="mailto:'+row['emailId']+'">'+row['emailId']+'</a>');
+									$("#dataWebsite").html('<a href="'+row['website']+'" data-role="external">'+row['website']+'</a>');
+									$("#dataHappyBirthDay").html(row['happyBirthDay']);
+									$('#dataList').trigger('create');
+									$('#dataList').listview('refresh');
+									$.mobile.hidePageLoadingMsg();
+								});
+							 });
+						}
+					}
+				});
+
+				//Change the hidden field value when the popup is closed
+				$('#actionList-popup').bind({
+					popupafterclose: function(event, ui){ 
+						$("#tapHoldCheck").val('');
+					}
+				});
+
+				$("#index [data-role='popup'] ul").on('click', 'li', function (event){
+					var action_liId = this.id.split('&');
+					var action = action_liId[0];
+					var id = action_liId[1];
+					if (action == 'edit'){
+						db.transaction(function (tx){
+							tx.executeSql("SELECT name, nickName, mobilePhoneNumber, workPhoneNumber, emailId, website, happyBirthDay  FROM MyContacts WHERE id=?;", [id], function (tx, results){
+								var row = results.rows.item(0);
+								$("#name").val(row['name']);
+								$("#nickName").val(row['nickName']);
+								$("#mobilePhoneNumber").val(row['mobilePhoneNumber']);
+								$("#workPhoneNumber").val(row['workPhoneNumber']);
+								$("#emailId").val(row['emailId']);
+								$("#website").val(row['website']);
+								$("#happyBirthDay").val(row['happyBirthDay']);
+								$("#id").val(id);
+								$("#addNewPageHeader").html('Edit');
+								$.mobile.changePage ($("#addNewPage"), { transition : "slide", reverse : true });
+							});
+						 });
+					}
+					if (action == 'delete'){
+						navigator.notification.confirm(
+							'Are you sure?',
+							function(buttonIndex){onConfirm(buttonIndex, id);},
+							'Delete Contact',
+							'Ok, Cancel'
+						);
+					}
+				});
+				
+				function onConfirm(buttonIndex, id){
+					if (buttonIndex === 1){ //Delete 
+						db.transaction(function (tx){ tx.executeSql("DELETE FROM MyContacts WHERE id=?", [id], queryDB, errorCB); });
+					}
+					if (buttonIndex === 2){
+						$.mobile.changePage($("#index"), { transition : "slide"});
+					}
+				}
+
+			});
+			</script>
+		</head>
+	<body>
+
+		<!-- Index Page Start -->
+		<div data-role="page" id="index">
+			<div data-role="header" data-position="fixed">
+				<a href="#" class="refresh" data-role="button" data-icon="refresh" data-theme="a" title="Refresh">Refresh</a>
+				<h1>My Contacts</h1>
+				<a href="#" class="addNew" data-role="button" data-icon="add" data-theme="a" title="Add New">Add</a>
+			</div>
+			<div data-role="content">
+				<ul data-role="listview" data-filter="true" data-filter-placeholder="Search..." id="userList">  </ul>
+			</div>
+			<div data-role="popup" id="actionList-popup" data-overlay-theme="a">
+				<ul data-role="listview" id="actionList" style="border: 1px solid blue; width:15em">  </ul>
+			</div>
+			<input type="hidden" id="tapHoldCheck" value="" />
+		</div>
+		<!-- Index Page End -->
+
+		<!-- Data Display Page Start -->
+		<div data-role="page" id="displayDataPage">
+			<div data-role="header" data-position="fixed">
+				<a href="#" class="back" data-role="button" data-icon="arrow-l" data-theme="a" title="Back">Back</a>
+				<h1 id="nameHeader"></h1>
+				<a href="#" class="addNew" data-role="button" data-icon="add" data-theme="a" title="Add New">Add</a>
+			</div>
+			<div data-role="content">
+				<ul data-role="listview" id="dataList">
+					<li>Name : <span id="dataName"></span></li>
+					<li>Nick Name : <span id="dataNickName"></span></li>
+					<li>Mobile Phone Number : <span id="dataMobilePhoneNumber"></span></li>
+					<li id="mpnCallSMS"></li>
+					<li>Work Phone Number : <span id="dataWorkPhoneNumber"></span></li>
+					<li id="wpnCallSMS"></li>
+					<li>Email Id : <span id="dataEmailId"></span></li>
+					<li>Website : <span id="dataWebsite"></span></li>
+					<li>Happy Birth Day : <span id="dataHappyBirthDay"></span></li>
+				</ul>
+			</div>
+		</div>
+		<!-- Data Display Page End -->
+
+		<!-- Form Page Start -->
+		<div data-role="page" id="addNewPage">
+			<div data-role="header" data-position="fixed">
+				<a href="#" class="back" data-role="button" data-icon="arrow-l" data-theme="a" title="Back">Back</a>
+				<h1 id="addNewPageHeader"></h1>
+				<a href="#" id="save" data-role="button" data-icon="check" data-theme="a" title="Save">Save</a>
+			</div>
+			<div data-role="content">
+				<div class='error'></div>
+				<div data-role="fieldcontain">
+					<label for="name">Name:</label>
+					<input type="text" name="name" id="name" required="true" maxlength="100" value="" />
+				</div>
+				<div data-role="fieldcontain">
+					<label for="nickName">Nick Name:</label>
+					<input type="text" name="nickName" id="nickName" maxlength="100" value="" />
+				</div>
+				<div data-role="fieldcontain">
+					<label for="mobilePhoneNumber">Mobile Number:</label>
+					<input type="tel" name="mobilePhoneNumber" id="mobilePhoneNumber" maxlength="15" value="" />
+				</div>
+				<div data-role="fieldcontain">
+					<label for="workPhoneNumber">Work Phone Number:</label>
+					<input type="tel" name="workPhoneNumber" id="workPhoneNumber" maxlength="15" value="" />
+				</div>
+				<div data-role="fieldcontain">
+					<label for="emailId">Email Id:</label>
+					<input type="email" name="emailId" id="emailId" maxlength="100" value="" />
+				</div>
+				<div data-role="fieldcontain">
+					<label for="website">Website:</label>
+					<input type="url" name="website" id="website" maxlength="100" value="" />
+				</div>
+				<div data-role="fieldcontain">
+					<label for="happyBirthDay">Happy Birth Day:</label>
+					<input type="date" name="happyBirthDay" id="happyBirthDay" value="" />
+				</div>
+				<input type="hidden" name="id" id="id" value="" />
+			</div>
+		</div>
+		<!-- Form Page End -->
+
+	</body>
+</html>
